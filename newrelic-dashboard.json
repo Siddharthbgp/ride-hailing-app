@@ -1,0 +1,651 @@
+{
+    "name": "GoComet Ride Hailing - Executive Dashboard",
+    "description": "High-level business metrics and KPIs for the ride-hailing application",
+    "permissions": "PUBLIC_READ_WRITE",
+    "pages": [
+        {
+            "name": "Business Overview",
+            "description": "Key business metrics and performance indicators",
+            "widgets": [
+                {
+                    "title": "Revenue Today",
+                    "layout": {
+                        "column": 1,
+                        "row": 1,
+                        "width": 3,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT sum(amount) FROM PaymentProcessed WHERE status = 'completed' SINCE today"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Total Rides Today",
+                    "layout": {
+                        "column": 4,
+                        "row": 1,
+                        "width": 3,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT count(*) FROM RideCreated SINCE today"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Active Rides",
+                    "layout": {
+                        "column": 7,
+                        "row": 1,
+                        "width": 3,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT latest(newrelic.timeslice.value) FROM Metric WHERE metricName = 'Custom/Business/ActiveRides'"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Available Drivers",
+                    "layout": {
+                        "column": 10,
+                        "row": 1,
+                        "width": 3,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT latest(newrelic.timeslice.value) FROM Metric WHERE metricName = 'Custom/Business/AvailableDrivers'"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Revenue Trend (24h)",
+                    "layout": {
+                        "column": 1,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT sum(amount) FROM PaymentProcessed WHERE status = 'completed' TIMESERIES 1 hour SINCE 24 hours ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Rides by Tier",
+                    "layout": {
+                        "column": 7,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.pie"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT count(*) FROM RideCreated FACET tier SINCE today"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Ride Completion Rate",
+                    "layout": {
+                        "column": 1,
+                        "row": 7,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT percentage(count(*), WHERE eventType = 'completed') FROM TripEvent SINCE 1 day ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Average Trip Duration",
+                    "layout": {
+                        "column": 5,
+                        "row": 7,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(duration) FROM Transaction WHERE name LIKE '%trip%' SINCE 1 day ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Payment Success Rate",
+                    "layout": {
+                        "column": 9,
+                        "row": 7,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT percentage(count(*), WHERE status = 'completed') FROM PaymentProcessed SINCE 1 day ago"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Performance Metrics",
+            "description": "Application performance and health metrics",
+            "widgets": [
+                {
+                    "title": "Response Time (95th Percentile)",
+                    "layout": {
+                        "column": 1,
+                        "row": 1,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT percentile(duration, 95) FROM Transaction TIMESERIES 5 minutes SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Throughput (Requests/min)",
+                    "layout": {
+                        "column": 7,
+                        "row": 1,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT rate(count(*), 1 minute) FROM Transaction TIMESERIES 1 minute SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Error Rate",
+                    "layout": {
+                        "column": 1,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT percentage(count(*), WHERE error IS true) FROM Transaction TIMESERIES 5 minutes SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Top 10 Slowest Endpoints",
+                    "layout": {
+                        "column": 7,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.bar"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(duration) FROM Transaction FACET name LIMIT 10 SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Database Query Performance",
+                    "layout": {
+                        "column": 1,
+                        "row": 7,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(duration) FROM DatastoreSegment TIMESERIES 5 minutes SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Active WebSocket Connections",
+                    "layout": {
+                        "column": 7,
+                        "row": 7,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT latest(newrelic.timeslice.value) FROM Metric WHERE metricName = 'Custom/WebSocket/ActiveConnections' TIMESERIES 1 minute SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Apdex Score",
+                    "layout": {
+                        "column": 1,
+                        "row": 10,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT apdex(duration, t: 0.5) FROM Transaction SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "CPU Usage",
+                    "layout": {
+                        "column": 5,
+                        "row": 10,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(cpuPercent) FROM SystemSample TIMESERIES 1 minute SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Memory Usage",
+                    "layout": {
+                        "column": 9,
+                        "row": 10,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(memoryUsedPercent) FROM SystemSample TIMESERIES 1 minute SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Surge Pricing & Demand",
+            "description": "Surge pricing metrics and demand-supply analysis",
+            "widgets": [
+                {
+                    "title": "Current Surge Factor by Tier",
+                    "layout": {
+                        "column": 1,
+                        "row": 1,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.bar"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(surgeFactor) FROM SurgePricingCalculated FACET tier SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Demand-Supply Ratio",
+                    "layout": {
+                        "column": 7,
+                        "row": 1,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(demandRatio) FROM SurgePricingCalculated TIMESERIES 5 minutes SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Rides with Surge Pricing",
+                    "layout": {
+                        "column": 1,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT count(*) FROM RideCreated WHERE surgeFactor > 1.0 TIMESERIES 1 hour SINCE 1 day ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Average Surge Factor Trend",
+                    "layout": {
+                        "column": 7,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT average(surgeFactor) FROM SurgePricingCalculated TIMESERIES 30 minutes SINCE 24 hours ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Pending Rides",
+                    "layout": {
+                        "column": 1,
+                        "row": 7,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT latest(newrelic.timeslice.value) FROM Metric WHERE metricName = 'Custom/Business/PendingRides' TIMESERIES 1 minute SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Available Drivers Trend",
+                    "layout": {
+                        "column": 7,
+                        "row": 7,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT latest(newrelic.timeslice.value) FROM Metric WHERE metricName = 'Custom/Business/AvailableDrivers' TIMESERIES 1 minute SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Errors & Debugging",
+            "description": "Error tracking and debugging information",
+            "widgets": [
+                {
+                    "title": "Error Count",
+                    "layout": {
+                        "column": 1,
+                        "row": 1,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT count(*) FROM TransactionError SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Error Rate",
+                    "layout": {
+                        "column": 5,
+                        "row": 1,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT percentage(count(*), WHERE error IS true) FROM Transaction SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Failed Payments",
+                    "layout": {
+                        "column": 9,
+                        "row": 1,
+                        "width": 4,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.billboard"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT count(*) FROM PaymentProcessed WHERE status = 'failed' SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Errors by Type",
+                    "layout": {
+                        "column": 1,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.pie"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT count(*) FROM TransactionError FACET error.class SINCE 1 day ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Error Trend",
+                    "layout": {
+                        "column": 7,
+                        "row": 4,
+                        "width": 6,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.line"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT count(*) FROM TransactionError TIMESERIES 5 minutes SINCE 1 hour ago"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Recent Errors",
+                    "layout": {
+                        "column": 1,
+                        "row": 7,
+                        "width": 12,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.table"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT timestamp, error.class, error.message, transactionName FROM TransactionError ORDER BY timestamp DESC LIMIT 20"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Slow Database Queries",
+                    "layout": {
+                        "column": 1,
+                        "row": 10,
+                        "width": 12,
+                        "height": 3
+                    },
+                    "visualization": {
+                        "id": "viz.table"
+                    },
+                    "rawConfiguration": {
+                        "nrqlQueries": [
+                            {
+                                "accountId": 0,
+                                "query": "SELECT timestamp, operation, model, duration FROM SlowDatabaseQuery ORDER BY duration DESC LIMIT 20"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
