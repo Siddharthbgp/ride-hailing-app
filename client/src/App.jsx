@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
-import io from 'socket.io-client';
+import { Client } from '@stomp/stompjs';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
 
@@ -17,7 +17,8 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const socket = io('http://localhost:3000');
+// STOMP Client (for Java Spring Boot WebSocket)
+let stompClient = null;
 
 function MapClickEvents({ onLocationSelect, mode }) {
   useMapEvents({
@@ -46,55 +47,124 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [rideHistory, setRideHistory] = useState([]);
+  const [wsConnected, setWsConnected] = useState(false);
 
+  // OTP and Rating State
+  const [otpInput, setOtpInput] = useState('');
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [completedRideInfo, setCompletedRideInfo] = useState(null);
+
+  // WebSocket connection using STOMP over SockJS
   useEffect(() => {
-    // Get initial location
+    // Initialize STOMP client
+    stompClient = new Client({
+      brokerURL: 'ws://localhost:3000/ws',
+      reconnectDelay: 5000,
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
+      debug: (str) => {
+        console.log('STOMP: ' + str);
+      },
+      onConnect: () => {
+        console.log('WebSocket Connected');
+        setWsConnected(true);
+
+        // Subscribe to driver location updates
+        stompClient.subscribe('/topic/driver_location_updated', (message) => {
+          const driver = JSON.parse(message.body);
+          setDrivers(prev => {
+            const idx = prev.findIndex(d => d.id === driver.id);
+            if (idx > -1) {
+              const newDrivers = [...prev];
+              newDrivers[idx] = driver;
+              return newDrivers;
+            }
+            return [...prev, driver];
+          });
+        });
+
+        // Subscribe to ride requests (for drivers)
+        stompClient.subscribe('/topic/ride_requested', (message) => {
+          const newRide = JSON.parse(message.body);
+          console.log("New ride request received!", newRide);
+          // Always update the ride state - the UI will conditionally show based on role
+          setStatusText(`New Ride Request: Earn $${newRide.price}`);
+          setRide(newRide);
+        });
+
+        // Subscribe to ride status updates
+        stompClient.subscribe('/topic/ride_status_updated', (message) => {
+          const updatedRide = JSON.parse(message.body);
+          console.log("Ride status updated - ID:", updatedRide.id, "Status:", updatedRide.status);
+
+          // Update ride state for any matching ride
+          setRide(currentRide => {
+            console.log("Comparing IDs - Current:", currentRide?.id, "Updated:", updatedRide.id);
+            // If no current ride or different ride, check if this update is for us
+            if (!currentRide || currentRide.id !== updatedRide.id) {
+              console.log("ID mismatch, ignoring");
+              return currentRide;
+            }
+            console.log("ID match! Updating to status:", updatedRide.status);
+
+            // Update status text based on new status
+            if (updatedRide.status === 'assigned') {
+              setStatusText('Driver found! Arriving soon.');
+              // Show OTP to rider
+              if (updatedRide.otp) {
+                setStatusText(`Driver assigned! Your OTP is: ${updatedRide.otp}`);
+              }
+            }
+            if (updatedRide.status === 'started') setStatusText('Trip started. Enjoy your ride!');
+            if (updatedRide.status === 'paused') setStatusText('Trip paused.');
+            if (updatedRide.status === 'completed') {
+              setStatusText('Trip Completed! Please rate your driver.');
+              setRideHistory(prev => [updatedRide, ...prev]);
+              // Show rating modal for rider
+              setCompletedRideInfo(updatedRide);
+              setShowRatingModal(true);
+            }
+            if (updatedRide.status === 'cancelled') {
+              setStatusText('Ride cancelled.');
+              setTimeout(() => {
+                setRide(null);
+                setPickup(null);
+                setDestination(null);
+              }, 2000);
+            }
+
+            return updatedRide;
+          });
+        });
+      },
+      onDisconnect: () => {
+        console.log('WebSocket Disconnected');
+        setWsConnected(false);
+      },
+      onStompError: (frame) => {
+        console.error('STOMP error:', frame);
+      }
+    });
+
+    stompClient.activate();
+
+    // Cleanup on unmount
+    return () => {
+      if (stompClient) {
+        stompClient.deactivate();
+      }
+    };
+  }, []);
+
+  // Get initial location
+  useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       (err) => console.log("Using default location", err)
     );
-
-    // Socket Listeners
-    socket.on('driver_location_updated', (driver) => {
-      setDrivers(prev => {
-        const idx = prev.findIndex(d => d.id === driver.id);
-        if (idx > -1) {
-          const newDrivers = [...prev];
-          newDrivers[idx] = driver;
-          return newDrivers;
-        }
-        return [...prev, driver];
-      });
-    });
-
-    socket.on('ride_requested', (newRide) => {
-      if (role === 'driver') {
-        console.log("New ride request!", newRide);
-        // In a real app, filter by vicinity. For demo, show all.
-        setStatusText(`New Ride Request: Earn $${newRide.price}`);
-        setRide(newRide);
-      }
-    });
-
-    socket.on('ride_status_updated', (updatedRide) => {
-      if (ride && ride.id === updatedRide.id) {
-        setRide(updatedRide);
-        if (updatedRide.status === 'assigned') setStatusText('Driver found! Arriving soon.');
-        if (updatedRide.status === 'started') setStatusText('Trip started. Enjoy your ride!');
-        if (updatedRide.status === 'paused') setStatusText('Trip paused.');
-        if (updatedRide.status === 'completed') {
-          setStatusText('Trip Completed. Payment Processed.');
-          setRideHistory(prev => [updatedRide, ...prev]);
-        }
-      }
-    });
-
-    return () => {
-      socket.off('driver_location_updated');
-      socket.off('ride_requested');
-      socket.off('ride_status_updated');
-    };
-  }, [role, ride]);
+  }, []);
 
   // Functions
   const requestRide = async () => {
@@ -150,26 +220,118 @@ export default function App() {
 
   const acceptRide = async () => {
     if (!ride) return;
-    await fetch(`${API_URL}/drivers/${userId}/accept`, {
+    const res = await fetch(`${API_URL}/drivers/${userId}/accept`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rideId: ride.id })
     });
-    setStatusText('Ride Accepted. Proceed to Pickup.');
+    const data = await res.json();
+    setRide(data); // Update with OTP
+    setStatusText('Ride Accepted. Ask rider for OTP to start trip.');
+  };
+
+  const startTrip = async () => {
+    if (!ride || !otpInput) {
+      setStatusText('Please enter the OTP from the rider');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/trips/${ride.id}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp: otpInput })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        setStatusText('Invalid OTP: ' + (errorData.error || 'Please try again'));
+        return;
+      }
+
+      const startedRide = await res.json();
+      setRide(startedRide);
+      setOtpInput('');
+      setStatusText('Trip started! Navigate to destination.');
+    } catch (err) {
+      setStatusText('Error starting trip');
+    }
+  };
+
+  const submitRating = async () => {
+    if (!completedRideInfo || ratingValue === 0) {
+      setStatusText('Please select a rating');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/rides/${completedRideInfo.id}/rating`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: ratingValue, comment: ratingComment })
+      });
+
+      if (res.ok) {
+        setStatusText('Thank you for your rating!');
+        setShowRatingModal(false);
+        setRatingValue(0);
+        setRatingComment('');
+        setCompletedRideInfo(null);
+        // Reset for new ride
+        setTimeout(() => {
+          setRide(null);
+          setPickup(null);
+          setDestination(null);
+          setStatusText('Ready for a new ride!');
+        }, 2000);
+      }
+    } catch (err) {
+      setStatusText('Error submitting rating');
+    }
   };
 
   const endTrip = async () => {
     if (!ride) return;
-    await fetch(`${API_URL}/trips/${ride.id}/end`, { method: 'POST' });
 
-    // Trigger Payment
-    await fetch(`${API_URL}/payments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rideId: ride.id, amount: ride.price })
-    });
+    try {
+      console.log("Calling end trip API for ride:", ride.id);
+      const endRes = await fetch(`${API_URL}/trips/${ride.id}/end`, { method: 'POST' });
 
-    setStatusText('Trip Ended. Available for new rides.');
+      if (!endRes.ok) {
+        const errorData = await endRes.json().catch(() => ({}));
+        console.error("End trip API failed:", errorData);
+        setStatusText('Failed to end trip: ' + (errorData.error || 'Unknown error'));
+        return;
+      }
+
+      const endedRide = await endRes.json();
+      console.log("End trip API succeeded:", endedRide);
+
+      // Update local state immediately with the response
+      setRide(endedRide);
+      setStatusText('Trip Completed! Processing payment...');
+
+      // Trigger Payment
+      const payRes = await fetch(`${API_URL}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rideId: ride.id, amount: ride.price })
+      });
+
+      if (payRes.ok) {
+        setStatusText('Trip Ended. Payment Processed. Available for new rides.');
+        // Reset after a delay
+        setTimeout(() => {
+          setRide(null);
+          setPickup(null);
+          setDestination(null);
+          setStatusText('Ready for new rides!');
+        }, 3000);
+      }
+    } catch (err) {
+      console.error("End trip error:", err);
+      setStatusText('Error ending trip');
+    }
   };
 
   const handleMapClick = (latlng) => {
@@ -188,7 +350,10 @@ export default function App() {
     <div className="container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h1>GoComet DAW</h1>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '0.8rem', color: wsConnected ? 'var(--success)' : 'var(--error)' }}>
+            {wsConnected ? '● Connected' : '○ Disconnected'}
+          </span>
           {!role && (
             <>
               <button className="btn-secondary" onClick={() => { setRole('rider'); setStatusText('Where to today?'); }} style={{ marginRight: 10 }}>I am a Rider</button>
@@ -292,6 +457,23 @@ export default function App() {
                 )}
 
                 {ride && ride.status === 'assigned' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div>
+                      <p style={{ marginBottom: 4, fontSize: '0.9rem' }}>Enter OTP from Rider:</p>
+                      <input
+                        type="text"
+                        maxLength={4}
+                        value={otpInput}
+                        onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                        placeholder="4-digit OTP"
+                        style={{ width: '100%', padding: '12px', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '0.5em' }}
+                      />
+                    </div>
+                    <button className="btn-primary" onClick={startTrip}>Start Trip with OTP</button>
+                  </div>
+                )}
+
+                {ride && ride.status === 'started' && (
                   <button className="btn-primary" onClick={endTrip}>End Trip (Simulate)</button>
                 )}
 
@@ -302,8 +484,65 @@ export default function App() {
             <div style={{ marginTop: '30px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px' }}>
               <h3>Debug Info</h3>
               <p style={{ fontSize: '0.8rem' }}>User ID: {userId}</p>
+              <p style={{ fontSize: '0.8rem' }}>Backend: Java/Spring Boot</p>
               {ride && <p style={{ fontSize: '0.8rem' }}>Ride ID: {ride.id} <br /> Status: {ride.status}</p>}
+              {ride && ride.otp && role === 'rider' && (
+                <p style={{ fontSize: '1.2rem', color: 'var(--accent)', fontWeight: 'bold' }}>
+                  🔐 Your OTP: {ride.otp}
+                </p>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rating Modal */}
+      {showRatingModal && role === 'rider' && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="glass-panel" style={{ maxWidth: '400px', textAlign: 'center' }}>
+            <h2>Rate Your Driver</h2>
+            {completedRideInfo && (
+              <div style={{ marginBottom: '20px' }}>
+                <p style={{ fontSize: '1.5rem', color: 'var(--success)' }}>Trip Completed!</p>
+                <p style={{ fontSize: '1.2rem' }}>Total Fare: ${completedRideInfo.price}</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '20px' }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRatingValue(star)}
+                  style={{
+                    fontSize: '2rem',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: star <= ratingValue ? '#FFD700' : '#555'
+                  }}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              placeholder="Add a comment (optional)"
+              value={ratingComment}
+              onChange={(e) => setRatingComment(e.target.value)}
+              style={{
+                width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '8px',
+                background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white'
+              }}
+              rows={3}
+            />
+
+            <button className="btn-primary" onClick={submitRating} style={{ width: '100%' }}>
+              Submit Rating
+            </button>
           </div>
         </div>
       )}
